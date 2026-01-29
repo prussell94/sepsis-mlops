@@ -1,0 +1,125 @@
+# PIPELINE DEFINITION
+# Name: sepsis-prediction-training-pipeline
+# Description: A pipeline that cleans medical data and trains an LSTM model.
+# Inputs:
+#    input_path: str [Default: '/data/raw_sepsis.psv']
+components:
+  comp-preprocess-op:
+    executorLabel: exec-preprocess-op
+    inputDefinitions:
+      parameters:
+        input_data_path:
+          parameterType: STRING
+    outputDefinitions:
+      artifacts:
+        output_dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+  comp-train-op:
+    executorLabel: exec-train-op
+    inputDefinitions:
+      artifacts:
+        input_dataset:
+          artifactType:
+            schemaTitle: system.Dataset
+            schemaVersion: 0.0.1
+      parameters:
+        batch_size:
+          defaultValue: 32.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+        epochs:
+          defaultValue: 10.0
+          isOptional: true
+          parameterType: NUMBER_INTEGER
+    outputDefinitions:
+      artifacts:
+        model_output:
+          artifactType:
+            schemaTitle: system.Artifact
+            schemaVersion: 0.0.1
+deploymentSpec:
+  executors:
+    exec-preprocess-op:
+      container:
+        args:
+        - --input
+        - '{{$.inputs.parameters[''input_data_path'']}}'
+        - --output
+        - '{{$.outputs.artifacts[''output_dataset''].path}}'
+        command:
+        - python
+        - preprocess.py
+        image: personal-project-registry/sepsis-preprocess:latest
+        resources:
+          cpuLimit: 2.0
+          memoryLimit: 4.0
+          resourceCpuLimit: '2'
+          resourceMemoryLimit: 4G
+    exec-train-op:
+      container:
+        args:
+        - --data
+        - '{{$.inputs.artifacts[''input_dataset''].path}}'
+        - --model_save_path
+        - '{{$.outputs.artifacts[''model_output''].path}}'
+        - --epochs
+        - '{{$.inputs.parameters[''epochs'']}}'
+        - --batch_size
+        - '{{$.inputs.parameters[''batch_size'']}}'
+        command:
+        - python
+        - train.py
+        image: personal-project-registry/sepsis-train:latest
+        resources:
+          accelerator:
+            count: '1'
+            resourceCount: '1'
+pipelineInfo:
+  description: A pipeline that cleans medical data and trains an LSTM model.
+  name: sepsis-prediction-training-pipeline
+root:
+  dag:
+    tasks:
+      preprocess-op:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-preprocess-op
+        inputs:
+          parameters:
+            input_data_path:
+              componentInputParameter: input_path
+        taskInfo:
+          name: preprocess-op
+      train-op:
+        cachingOptions:
+          enableCache: true
+        componentRef:
+          name: comp-train-op
+        dependentTasks:
+        - preprocess-op
+        inputs:
+          artifacts:
+            input_dataset:
+              taskOutputArtifact:
+                outputArtifactKey: output_dataset
+                producerTask: preprocess-op
+          parameters:
+            batch_size:
+              runtimeValue:
+                constant: 64.0
+            epochs:
+              runtimeValue:
+                constant: 20.0
+        taskInfo:
+          name: train-op
+  inputDefinitions:
+    parameters:
+      input_path:
+        defaultValue: /data/raw_sepsis.psv
+        isOptional: true
+        parameterType: STRING
+schemaVersion: 2.1.0
+sdkVersion: kfp-2.15.2

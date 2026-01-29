@@ -1,0 +1,9 @@
+# Data Manipulation
+pandas==2.1.0
+numpy==1.24.3
+
+# Statistical Cleaning & Scaling
+scikit-learn==1.3.0
+
+# MLOps Tracking (to log data stats)
+mlflow==2.7.1
